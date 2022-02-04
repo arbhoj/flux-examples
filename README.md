@@ -1,49 +1,105 @@
-## This repository contains few basic examples on how to deploy applicatons using flux
+This repository contains few basic examples on how to deploy applicatons using flux. 
 
 ## Kustomize
 
-Git Repository
+Step 1. Create a Git Repository resource with the following
+- URL of the repository that contains the manifests to be applied.
+- The branch to be used 
 
 ```
+kubectl create ns demo
+
+export NAMESPACE=demo
 
 kubectl apply -f - <<EOF
 apiVersion: source.toolkit.fluxcd.io/v1beta1
 kind: GitRepository
 metadata:
-  name: abtest-repo
-  namespace: kommander-flux
+  name: demo-repo
+  namespace: ${NAMESPACE}
 spec:
   interval: 1m0s
   ref:
-    branch: main
+    branch: master
   timeout: 20s
   url: https://github.com/arbhoj/sample-k8s-app
 EOF
 ```
-
-#### Kustomize
+Check if the repository is fetched successfully
 
 ```
+kubectl get gitrepository -n ${NAMESPACE}
+```
+
+Step 2. Create a Kustomize resource with the following:
+- Source Reference to the git repository created in the last step
+- The path within the gitrepository that contains the manifests to be applied
+- Patches that patch specific sections of the manifest being applied. In this example the namespace is being replaced. 
+> Note: The patch specification follows [rfc6902](https://datatracker.ietf.org/doc/html/rfc6902)
+
+```
+export NAMESPACE=demo
+
 kubectl apply -f - <<EOF
-apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
 metadata:
-  name: testkustomization
-  namespace: ${WORKSPACE_NAMESPACE}
+  name: demokustomization
+  namespace: ${NAMESPACE}
 spec:
+  patches:
+   - patch: |
+       - op: replace
+         path: /metadata/namespace
+         value: ${NAMESPACE}
+     target:
+       kind: Deployment
+   - patch: |
+       - op: replace
+         path: /metadata/namespace
+         value: ${NAMESPACE}
+     target:
+       kind: Service
+   - patch: |
+       - op: replace
+         path: /metadata/namespace
+         value: ${NAMESPACE}
+     target:
+       kind: ConfigMap
+   - patch: |
+       - op: replace
+         path: /metadata/namespace
+         value: ${NAMESPACE}
+     target:
+       kind: Ingress
   interval: 1m0s
   path: ./basic
   prune: true
   sourceRef:
-    kind: GitRepository
-    name: abtest-repo
-    namespace: kommander-flux
+   kind: GitRepository
+   name: demo-repo
+   namespace: ${NAMESPACE}
 EOF
 ```
 
+Check the resources deployed
+
+```
+kubectl get kustomization -n ${NAMESPACE}
+
+kubectl get all -n ${NAMESPACE}
+```
+
+Cleanup
+
+```
+kubectl delete -n {NAMESPACE} kustomization demokustomization
+kubectl delete -n {NAMESPACE} gitrepository demo-repo
+```
 ## HelmRelease
 
-#### HelmRepo
+Step 1. Create a HelmRepositoy resource with the following:
+- URL of the Helm Repository to be used. 
 ```
 kubectl apply -f - <<EOF
 apiVersion: source.toolkit.fluxcd.io/v1beta1
@@ -61,7 +117,9 @@ spec:
 EOF
 ```
 
-#### HelmRelease
+Step 2 Create a HelmRelease resource with the following:
+- Reference to the HelmRepository resource created in the last step
+- 
 
 ```
 kubectl apply -f - <<EOF
