@@ -101,6 +101,8 @@ kubectl delete -n {NAMESPACE} gitrepository demo-repo
 Step 1. Create a HelmRepositoy resource with the following:
 - URL of the Helm Repository to be used. 
 ```
+export NAMESPACE=demo
+
 kubectl apply -f - <<EOF
 apiVersion: source.toolkit.fluxcd.io/v1beta1
 kind: HelmRepository
@@ -109,7 +111,7 @@ metadata:
     kustomize.toolkit.fluxcd.io/name: helm-repository
     kustomize.toolkit.fluxcd.io/namespace: kommander-flux
   name: csi-driver-smb
-  namespace: kommander-flux
+  namespace: ${NAMESPACE}
 spec:
   interval: 10m
   timeout: 1m
@@ -119,8 +121,16 @@ EOF
 
 Step 2 Create a HelmRelease resource with the following:
 - Reference to the HelmRepository resource created in the last step
-- 
 
+> Note the following helm chart requires the associated serviceaccount to have permissions to `csidrivers.storage.k8s.io` at cluster scope. Hence the following RBAC needs to be created first
+
+```
+export NAMESPACE=demo
+kubectl create clusterrole csi-driver-smb --verb='*' --resource=csidrivers.storage.k8s.io
+kubectl create clusterrolebinding ${PROJECT}-csi-driver-smb --clusterrole csi-driver-smb --serviceaccount ${PROJECT}:${PROJECT}
+```
+
+Now deploy the HelmRelease
 ```
 kubectl apply -f - <<EOF
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
@@ -131,7 +141,7 @@ metadata:
     kustomize.toolkit.fluxcd.io/name: csi-driver-smb-release
     kustomize.toolkit.fluxcd.io/namespace: student
   name: csi-driver-smb
-  namespace: ${WORKSPACE_NAMESPACE}
+  namespace: ${NAMESPACE}
 spec:
   chart:
     spec:
@@ -139,17 +149,38 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: csi-driver-smb
-        namespace: kommander-flux
+        namespace: ${NAMESPACE}
       version: v1.3.0
   install:
-    createNamespace: true
+    createNamespace: false
     remediation:
       retries: 30
   interval: 15s
+  serviceAccountName: ${NAMESPACE}
   releaseName: csi-driver-smb
-  targetNamespace: csi-driver-smb
+  targetNamespace: ${NAMESPACE}
   upgrade:
     remediation:
       retries: 30
 EOF
 ```
+
+
+## Useful commands
+
+To sync a GitRepository on demand
+```
+export PROJECT=demo
+export GIT_REPOSITORY=demo-project-repo
+kubectl -n ${PROJECT} annotate --overwrite gitrepository/${GIT_REPOSITORY} reconcile.fluxcd.io/requestedAt='$(date +%s)'
+
+```
+
+To sync a HelmRelease on demand
+```
+export PROJECT=demo
+export HELM_RELEASE=csi-driver-smb
+kubectl -n ${PROJECT} annotate --overwrite helmrelease/${HELM_RELEASE} reconcile.fluxcd.io/requestedAt='$(date +%s)'
+```
+
+> Note: Other Flux resources can be synced on demand in a similar fashion
