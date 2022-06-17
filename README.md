@@ -75,6 +75,7 @@ spec:
   interval: 1m0s
   path: ./basic
   prune: true
+  serviceAccountName: ${NAMESPACE}
   sourceRef:
    kind: GitRepository
    name: demo-repo
